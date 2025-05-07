@@ -129,6 +129,17 @@ def create_dash_app(flask_app):
                 html.H3("Data Visualization", className="text-secondary"),
                 dcc.Graph(id='data-graph')
             ], width=12)
+        ]),
+
+        # Box Plot Section
+        dbc.Row([
+            dbc.Col([
+                html.H3("Box Plot Visualization", className="text-secondary"),
+                dcc.Loading(
+                    dcc.Graph(id='box-plot-graph'),
+                    type='circle'
+                )
+            ], width=12)
         ])
     ], fluid=True)
 
@@ -271,5 +282,56 @@ def create_dash_app(flask_app):
             except Exception as e:
                 return {'data': [], 'layout': {'title': f'Error: {str(e)}'}}
         return {'data': [], 'layout': {'title': 'No Data Available'}}
+
+    @app_dash.callback(
+        Output('box-plot-graph', 'figure'),
+        Input('analyze-button', 'n_clicks')
+    )
+    def update_box_plot(n_clicks):
+        if n_clicks > 0:
+            try:
+                # Gọi API /get_dataframe để lấy dữ liệu
+                response = requests.get('http://localhost:5000/api/v1/get_dataframe')
+                if response.status_code == 200:
+                    df = pd.DataFrame(response.json())
+
+                    # Tạo Box Plot
+                    numeric_columns = df.select_dtypes(include=['number']).columns
+                    if numeric_columns.empty:
+                        return {
+                            'data': [],
+                            'layout': {'title': 'No numeric data available for Box Plot'}
+                        }
+
+                    fig = {
+                        'data': [
+                            {
+                                'y': df[col],
+                                'type': 'box',
+                                'name': col
+                            } for col in numeric_columns
+                        ],
+                        'layout': {
+                            'title': 'Box Plot of Numeric Features',
+                            'yaxis': {'title': 'Values'},
+                            'xaxis': {'title': 'Features'},
+                            'boxmode': 'group'
+                        }
+                    }
+                    return fig
+                else:
+                    return {
+                        'data': [],
+                        'layout': {'title': 'Error fetching data for Box Plot'}
+                    }
+            except Exception as e:
+                return {
+                    'data': [],
+                    'layout': {'title': f'Error: {str(e)}'}
+                }
+        return {
+            'data': [],
+            'layout': {'title': 'No Data Available'}
+        }
 
     return app_dash
