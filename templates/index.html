@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload and Preprocess</title>
+    <!-- Add Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Add SweetAlert2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+    <!-- Add Socket.IO -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body class="container mt-5">
+    <h2 class="text-center mb-4">Upload and Preprocess CSV File</h2>
+
+    <!-- Upload Form -->
+    <form id="uploadForm" enctype="multipart/form-data">
+        <div class="mb-3">
+            <label for="fileInput" class="form-label">Upload CSV File</label>
+            <input type="file" id="fileInput" class="form-control">
+        </div>
+        
+        <!-- Fill Missing Options -->
+        <div id="fillMissingOptions" class="mb-3">
+            <label for="fillMethod" class="form-label">Fill Missing Method</label>
+            <select id="fillMethod" class="form-select" onchange="toggleConstantInput()">
+                <option value="mean">Mean</option>
+                <option value="constant">Constant</option>
+                <option value="linear">Linear</option>
+            </select>
+            <div id="constantValueInput" class="mt-2" style="display: none;">
+                <label for="constantValue" class="form-label">Constant Value</label>
+                <input type="number" id="constantValue" class="form-control" placeholder="Enter constant value">
+            </div>
+        </div>
+
+        <!-- Outliers Options -->
+        <div id="outliersOptions" class="mb-3">
+            <label for="outlierMethod" class="form-label">Outlier Detection Method</label>
+            <select id="outlierMethod" class="form-select">
+                <option value="mean">Mean</option>
+                <option value="median">Median</option>
+            </select>
+        </div>
+
+        <!-- Feature Extraction Options -->
+        <div id="featureExtractionOptions" class="mb-3">
+            <label for="featureRange" class="form-label">Feature Range (%)</label>
+            <input type="number" id="featureRange" class="form-control" value="100" min="1" max="100">
+        </div>
+
+        <!-- Submit Button -->
+        <button type="button" class="btn btn-primary w-100" onclick="submitForm()">Submit</button>
+    </form>
+
+    <!-- Progress Bar -->
+    <div class="progress mt-3" style="height: 25px;">
+        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+            0%
+        </div>
+    </div>
+
+    <!-- Dataset List -->
+    <h2 class="text-center mt-5 mb-4">Dataset List</h2>
+    <div class="d-flex justify-content-between mb-3">
+        <button id="reloadButton" class="btn btn-primary">Reload Datasets</button>
+    </div>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>File ID</th>
+                <th>Filename</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="datasetTable">
+            <!-- Rows will be dynamically added here -->
+        </tbody>
+    </table>
+
+    <!-- Add SweetAlert2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        const socket = io();
+        const datasetTable = document.getElementById('datasetTable');
+        const reloadButton = document.getElementById('reloadButton');
+
+        function toggleConstantInput() {
+            const method = document.getElementById('fillMethod').value;
+            document.getElementById('constantValueInput').style.display = method === 'constant' ? 'block' : 'none';
+        }
+
+        function submitForm() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Please select a file to upload.',
+                });
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const fillMethod = document.getElementById('fillMethod').value;
+            formData.append('fill_method', fillMethod);
+            if (fillMethod === 'constant') {
+                const constantValue = document.getElementById('constantValue').value;
+                formData.append('constant_value', constantValue);
+            }
+
+            const outlierMethod = document.getElementById('outlierMethod').value;
+            formData.append('outlier_method', outlierMethod);
+
+            const featureRange = document.getElementById('featureRange').value;
+            formData.append('feature_range', featureRange);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'http://localhost:5000/upload', true);
+
+            xhr.upload.addEventListener('progress', function (e) {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    const progressBar = document.getElementById('progressBar');
+                    progressBar.style.width = percent + '%';
+                    progressBar.setAttribute('aria-valuenow', percent);
+                    progressBar.textContent = percent + '%';
+                }
+            });
+
+            xhr.onload = function () {
+                const progressBar = document.getElementById('progressBar');
+                if (xhr.status === 200) {
+                    const response = JSON.parse(xhr.responseText);
+                    progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+                    progressBar.classList.add('bg-success');
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success',
+                        text: `Uploaded successfully: ${response.filename}`,
+                    });
+                    fetchDatasets(); // Reload datasets after upload
+                } else {
+                    progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+                    progressBar.classList.add('bg-danger');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Failed',
+                        text: 'Upload failed. Please try again.',
+                    });
+                }
+            };
+
+            xhr.onerror = function () {
+                const progressBar = document.getElementById('progressBar');
+                progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+                progressBar.classList.add('bg-danger');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Connection Error',
+                    text: 'Unable to connect to the server. Please check your network connection.',
+                });
+            };
+
+            xhr.send(formData);
+        }
+
+        async function fetchDatasets() {
+            const response = await fetch('/api/datasets');
+            const datasets = await response.json();
+            renderDatasets(datasets);
+        }
+
+        function renderDatasets(datasets) {
+            datasetTable.innerHTML = '';
+            datasets.forEach(dataset => {
+                const row = document.createElement('tr');
+                row.id = `row-${dataset._id}`;
+                row.innerHTML = `
+                    <td>${dataset._id}</td>
+                    <td>${dataset.filename}</td>
+                    <td id="status-${dataset._id}">${dataset.status}</td>
+                    <td>
+                        <div class="progress">
+                            <div id="progress-${dataset._id}" class="progress-bar" role="progressbar" style="width: ${dataset.percentage_completed}%" aria-valuenow="${dataset.percentage_completed}" aria-valuemin="0" aria-valuemax="100">
+                                ${dataset.percentage_completed}%
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <button class="btn btn-danger btn-sm" onclick="deleteDataset('${dataset._id}')">Delete</button>
+                        ${dataset.status === 'completed' ? `<button class="btn btn-success btn-sm" onclick="viewDataset('${dataset._id}')">View</button>` : ''}
+                    </td>
+                `;
+                datasetTable.appendChild(row);
+            });
+        }
+
+        async function viewDataset(file_id) {
+            const response = await fetch(`/api/datasets/${file_id}/view`);
+            if (response.ok) {
+                const data = await response.json();
+                window.open(data.url, '_blank');
+            } else {
+                const error = await response.json();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Failed!',
+                    text: error.error || 'Failed to view the dataset. Please try again.',
+                });
+            }
+        }
+
+        async function deleteDataset(file_id) {
+            const confirmation = await Swal.fire({
+                title: 'Are you sure?',
+                text: 'This action will delete the dataset permanently!',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, delete it!'
+            });
+
+            if (confirmation.isConfirmed) {
+                const response = await fetch(`/api/datasets/${file_id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    document.getElementById(`row-${file_id}`).remove();
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Deleted!',
+                        text: 'Dataset has been deleted successfully.',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Failed!',
+                        text: 'Failed to delete the dataset. Please try again.',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                }
+            }
+        }
+
+        socket.on('progress_update', data => {
+            const { file_id, percentage_completed, status } = data;
+
+            const statusCell = document.getElementById(`status-${file_id}`);
+            if (statusCell) {
+                statusCell.textContent = status;
+            }
+
+            const progressBar = document.getElementById(`progress-${file_id}`);
+            if (progressBar) {
+                progressBar.style.width = `${percentage_completed}%`;
+                progressBar.setAttribute('aria-valuenow', percentage_completed);
+                progressBar.textContent = `${percentage_completed}%`;
+
+                if (percentage_completed === 100) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Processing Complete!',
+                        text: `Dataset ${file_id} has been processed successfully.`,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+
+                    // Add a button to view the dataset
+                    const viewButton = document.createElement('button');
+                    viewButton.className = 'btn btn-success btn-sm';
+                    viewButton.textContent = 'View';
+                    viewButton.onclick = () => {
+                        viewDataset(file_id);
+                    };
+                    const actionsCell = document.querySelector(`#row-${file_id} td:last-child`);
+                    actionsCell.appendChild(viewButton);
+                    
+                }
+            }
+        });
+
+        reloadButton.addEventListener('click', async () => {
+            Swal.fire({
+                title: 'Loading datasets...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            try {
+                await fetchDatasets();
+                Swal.close();
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Failed!',
+                    text: 'Failed to load datasets. Please try again.',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            }
+        });
+
+        fetchDatasets();
+    </script>
+</body>
+</html>
