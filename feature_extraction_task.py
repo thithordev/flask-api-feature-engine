@@ -18,6 +18,7 @@ def process_feature_extraction(ch, method, properties, body):
         update_data = {
             "file_id": file_id,
             "step_preprocess": "feature_extraction",
+            "file_path_preprocess": feature_file_path,
             "percentage_completed": 100,
             "status": "completed"
         }

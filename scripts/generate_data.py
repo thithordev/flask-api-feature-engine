@@ -6,7 +6,7 @@ import string
 
 # Configuration
 num_columns = 50  # Number of sensor columns
-periods = 126000      # Number of rows (48 hours with 30-minute intervals)
+periods = 126      # Number of rows (48 hours with 30-minute intervals)
 freq_minutes = 30
 start_time = datetime(2021, 5, 15, 0, 0, 0)
 
@@ -72,5 +72,5 @@ for col in columns:
 
 # Export to DataFrame
 df = pd.DataFrame(data)
-df.to_csv("data/dummy_data_with_outliers_1.csv", index=False)
+df.to_csv("data/dummy_data_with_outliers.csv", index=False)
 print("✅ File 'dummy_data_with_outliers.csv' has been generated successfully with missing values.")

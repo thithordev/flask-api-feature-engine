@@ -22,6 +22,7 @@ def process_detect_outliers(ch, method, properties, body):
         update_data = {
             "file_id": file_id,
             "step_preprocess": "detect_outliers",
+            "file_path_preprocess": outlier_file_path,
             "percentage_completed": 66,
             "status": "pending"
         }
