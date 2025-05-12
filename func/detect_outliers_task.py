@@ -1,7 +1,7 @@
 import json
 import requests
-from services.detect_outliers import detect_outliers
-from configs.rabbitmq_config import RabbitMQHelper, RabbitMQConfig
+from func.services.detect_outliers import detect_outliers
+from app.configs.rabbitmq_config import RabbitMQHelper, RabbitMQConfig
 
 def process_detect_outliers(ch, method, properties, body):
     """Process the detect_outliers task."""

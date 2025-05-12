@@ -21,7 +21,7 @@ def feature_extraction(file_path, top_x = 100):
     selected_features = X_transformed.iloc[:, :num_features]
     
     # Combine selected features with the target variable
-    features = pd.concat([selected_features, y], axis=1)
+    features = pd.concat([y, selected_features], axis=1)
     
     # File name from the original file path
     file_name = file_path.split('\\')[-1].split('.')[0]

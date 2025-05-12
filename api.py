@@ -7,12 +7,13 @@ import os
 import time
 from datetime import datetime
 from dtale.app import get_instance
-from configs.rabbitmq_config import RabbitMQConfig, RabbitMQHelper
-from configs.mongodb_config import MongoDBConfig, MongoDBHelper
+from app.configs.rabbitmq_config import RabbitMQConfig, RabbitMQHelper
+from app.configs.mongodb_config import MongoDBConfig, MongoDBHelper
 import dtale
 import pandas as pd
+import socket
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='app/templates', static_folder='app/static')
 CORS(app)
 
 # Initialize Flask-SocketIO
@@ -232,9 +233,10 @@ def view_dataset(file_id):
         return jsonify({"error": "Processed file not found"}), 404
     
     # Khởi chạy D-Tale
-    # dtale_app.USE_FLASK_APP = False
+    host_ip = socket.gethostbyname(socket.gethostname())
     df = pd.read_csv(file_path)
-    instance = dtale.show(df, ignore_duplicate=True)
+    df = df.drop_duplicates()
+    instance = dtale.show(df, host=host_ip)
 
     dtale_url = instance._main_url
 
@@ -247,17 +249,24 @@ def view_original_dataset(file_id):
     dataset = mongo_helper.find_document("dataset", {"_id": ObjectId(file_id)})
     if not dataset:
         return jsonify({"error": "Dataset not found"}), 404
+    
+    dtale_url = dataset.get('dtale_url_original')
+    if dtale_url:
+        session_id = dtale_url.split('/')[-1]
+        if get_instance(session_id):
+            return jsonify({"url": dtale_url}), 200
 
     file_path = dataset.get('file_path')
     if not file_path or not os.path.exists(file_path):
         return jsonify({"error": "Processed file not found"}), 404
-    
+    host_ip = socket.gethostbyname(socket.gethostname())
     df = pd.read_csv(file_path)
-    instance = dtale.show(df, ignore_duplicate=True)
+    df = df.drop_duplicates()
+    instance = dtale.show(df, host=host_ip)
 
     dtale_url = instance._main_url
 
-    mongo_helper.update_document("dataset", {"_id": ObjectId(file_id)}, {"dtale_url": dtale_url})
+    mongo_helper.update_document("dataset", {"_id": ObjectId(file_id)}, {"dtale_url_original": dtale_url})
     return jsonify({"url": dtale_url}), 200
 
 @app.route('/api/preprocessing', methods=['POST'])
