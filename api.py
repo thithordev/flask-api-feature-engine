@@ -70,12 +70,6 @@ def upload_file():
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
     file.save(file_path)
 
-    # Get infomation from form data
-    fill_method = request.form.get('fill_method')
-    constant_value = request.form.get('constant_value') if fill_method == 'constant' else None
-    outlier_method = request.form.get('outlier_method')
-    feature_range = request.form.get('feature_range')
-
     # Save file metadata to MongoDB
     file_metadata = {
         "filename": file.filename,
@@ -88,10 +82,22 @@ def upload_file():
         "percentage_completed": 0,
     }
     file_id = mongo_helper.insert_document("dataset", file_metadata)
+    return jsonify({"message": "File successfully uploaded", "filename": file.filename}), 200
+
+@app.route('/processSubmit', methods=['POST'])
+def submit_process_file():
+    # Get infomation from form data
+    fileId = request.form.get('dataset_id')
+    fill_method = request.form.get('fill_method')
+    constant_value = request.form.get('constant_value') if fill_method == 'constant' else None
+    outlier_method = request.form.get('outlier_method')
+    feature_range = request.form.get('feature_range')
+
+    file = mongo_helper.find_document("dataset", {"_id": ObjectId(fileId)})
 
     # Save config data to dataset_config (intermediate table)
     dataset_config_data = {
-        "dataset_id": str(file_id),
+        "dataset_id": str(fileId),
         "configs": [
             {
                 "config_id": "fill_missing",
@@ -109,7 +115,6 @@ def upload_file():
         ],
         "created_at": datetime.utcnow()
     }
-    dataset_config_id = mongo_helper.insert_document("dataset_config", dataset_config_data)
 
 
     # Initialize RabbitMQ configuration
@@ -138,9 +143,9 @@ def upload_file():
 
     # Message to be sent to the queue
     message = {
-        "file_id": str(file_id),
-        "filename": file.filename,
-        "file_path": file_path,
+        "file_id": str(fileId),
+        "filename": file.get('filename'),
+        "file_path": file.get('file_path'),
         "step_preprocess": 'fill_missing',
         "method_fill_missing": fill_method,
         "constant_value": constant_value,
@@ -153,7 +158,7 @@ def upload_file():
     # Publish the message to RabbitMQ
     rabbitmq_helper.publish_message(exchange_name, routing_key_fill_missing, json.dumps(message))
 
-    return jsonify({"message": "File successfully uploaded", "filename": file.filename}), 200
+    return jsonify({"message": "File submit processed", "filename": file.get('filename')}), 200
 
 @app.route('/uploads/<path:filename>', methods=['GET'])
 def get_uploaded_file(filename):
@@ -228,6 +233,25 @@ def view_dataset(file_id):
     
     # Khởi chạy D-Tale
     # dtale_app.USE_FLASK_APP = False
+    df = pd.read_csv(file_path)
+    instance = dtale.show(df, ignore_duplicate=True)
+
+    dtale_url = instance._main_url
+
+    mongo_helper.update_document("dataset", {"_id": ObjectId(file_id)}, {"dtale_url": dtale_url})
+    return jsonify({"url": dtale_url}), 200
+
+@app.route('/api/datasets/<file_id>/original', methods=['GET'])
+def view_original_dataset(file_id):
+    """Launch D-Tale to view the dataset."""
+    dataset = mongo_helper.find_document("dataset", {"_id": ObjectId(file_id)})
+    if not dataset:
+        return jsonify({"error": "Dataset not found"}), 404
+
+    file_path = dataset.get('file_path')
+    if not file_path or not os.path.exists(file_path):
+        return jsonify({"error": "Processed file not found"}), 404
+    
     df = pd.read_csv(file_path)
     instance = dtale.show(df, ignore_duplicate=True)
 
