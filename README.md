@@ -1,4 +1,3 @@
-
 # Flask API Feature Engineering
 
 This project is a Flask-based API for data processing and feature engineering, integrated with a Dash dashboard for data visualization and analysis. It provides endpoints for various data preprocessing tasks such as detecting outliers, filling missing values, feature extraction, and more.
@@ -21,17 +20,21 @@ This project is a Flask-based API for data processing and feature engineering, i
 
 ```
 flask-api-feature-engine/
-├── app.py                     # Main Flask application
-├── endpoints/                 # API endpoints
-│   ├── detect_outliers.py     # Outlier detection logic
-│   ├── fill_missing.py        # Missing value handling
-│   ├── feature_extraction.py  # Feature extraction logic
-│   ├── describe_data.py       # Data description logic
-│   ├── get_dataframe.py       # Retrieve datasets
-│   ├── upload_data.py         # Upload datasets
-│   └── dash_plot.py           # Dash dashboard integration
-├── data/                      # Sample and processed data
-├── .gitignore                 # Ignored files and directories
+├── api.py                     # Main Flask application
+├── func/                      # Task processing and services
+│   ├── fill_missing_task.py   # Task for filling missing values
+│   ├── detect_outliers_task.py # Task for detecting outliers
+│   ├── feature_extraction_task.py # Task for feature extraction
+│   └── services/              # Service logic for tasks
+│       ├── fill_missing.py    # Logic for filling missing values
+│       ├── detect_outliers.py # Logic for detecting outliers
+│       ├── feature_extraction.py # Logic for feature extraction
+├── app/                       # Application configurations and templates
+│   ├── configs/               # Configuration files
+│   │   ├── rabbitmq_config.py # RabbitMQ configuration
+│   │   ├── mongodb_config.py  # MongoDB configuration
+│   └── templates/             # HTML templates for the Flask app
+├── uploads/                   # Directory for uploaded and processed files
 ├── requirements.txt           # Python dependencies
 └── README.md                  # Project documentation
 ```
@@ -47,7 +50,8 @@ flask-api-feature-engine/
 2. Create a virtual environment and activate it:
    ```bash
    python -m venv .venv
-   .venv\Scriptsctivate  # On Windows
+   .venv\Scripts\activate  # On Windows
+   source .venv/bin/activate  # On macOS/Linux
    ```
 
 3. Install dependencies:
@@ -57,21 +61,22 @@ flask-api-feature-engine/
 
 4. Run the application:
    ```bash
-   python app.py
+   python api.py
    ```
 
-5. Access the API at `http://127.0.0.1:5000/api/v1/` and the Dash dashboard at `http://127.0.0.1:5000/`.
+5. Access the API at `http://127.0.0.1:5000/` and the Dash dashboard at `http://127.0.0.1:5000/`.
 
 ## API Endpoints
 
 | Endpoint                     | Method | Description                          |
 |------------------------------|--------|--------------------------------------|
-| `/api/v1/detect_outliers`    | GET    | Detect outliers in the dataset.      |
-| `/api/v1/fill_missing`       | GET    | Fill missing values in the dataset.  |
-| `/api/v1/feature_extraction` | GET    | Extract features from the dataset.   |
-| `/api/v1/describe_data`      | GET    | Get descriptive statistics of data.  |
-| `/api/v1/get_dataframe`      | GET    | Retrieve the uploaded dataset.       |
-| `/api/v1/upload_data`        | POST   | Upload a new dataset.                |
+| `/upload`                    | POST   | Upload a new dataset.                |
+| `/processSubmit`             | POST   | Submit a dataset for processing.     |
+| `/api/datasets`              | GET    | Fetch all datasets.                  |
+| `/api/datasets/<file_id>`    | DELETE | Delete a dataset.                    |
+| `/api/datasets/<file_id>/view` | GET  | View a processed dataset in D-Tale.  |
+| `/api/datasets/<file_id>/original` | GET | View the original dataset in D-Tale. |
+| `/api/preprocessing`         | POST   | Update preprocessing status.         |
 
 ## Dash Dashboard
 
@@ -83,15 +88,18 @@ The Dash dashboard provides an interactive interface for data analysis. Features
 
 ## Requirements
 
-- Python 3.8 or higher
+- Python 3.11 or higher
 - Flask
 - Dash
-- Dash Bootstrap Components
 - Pandas
 - Requests
+- MongoDB
+- RabbitMQ
+- Websocket
 
 ## Acknowledgments
 
 - [Flask](https://flask.palletsprojects.com/) for the web framework.
 - [Dash](https://dash.plotly.com/) for the interactive dashboard.
-- [Dash Bootstrap Components](https://dash-bootstrap-components.opensource.faculty.ai/) for UI components.
+- [Feature-engine](https://feature-engine.readthedocs.io/) for feature engineering utilities.
+- [D-Tale](https://github.com/man-group/dtale) for dataset visualization.
