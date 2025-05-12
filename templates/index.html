@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,6 +12,7 @@
     <!-- Add Socket.IO -->
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
+
 <body class="container mt-5">
     <h2 class="text-center mb-4">Upload and Preprocess CSV File</h2>
 
@@ -20,7 +22,42 @@
             <label for="fileInput" class="form-label">Upload CSV File</label>
             <input type="file" id="fileInput" class="form-control">
         </div>
-        
+
+        <!-- Submit Button -->
+        <button type="button" class="btn btn-primary w-100" onclick="submitForm()">Submit</button>
+    </form>
+
+    <!-- Progress Bar -->
+    <div class="progress mt-3" style="height: 25px;">
+        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
+            style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+            0%
+        </div>
+    </div>
+
+    <!-- Dataset List -->
+    <h2 class="text-center mt-5 mb-4">Dataset List</h2>
+    <div class="d-flex justify-content-between mb-3">
+        <button id="reloadButton" class="btn btn-primary">Reload Datasets</button>
+    </div>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Select</th>
+                <th>File ID</th>
+                <th>Filename</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="datasetTable">
+            <!-- Rows will be dynamically added here -->
+        </tbody>
+    </table>
+
+    <!-- Submit Form -->
+    <form id="uploadProcessForm" enctype="multipart/form-data">
         <!-- Fill Missing Options -->
         <div id="fillMissingOptions" class="mb-3">
             <label for="fillMethod" class="form-label">Fill Missing Method</label>
@@ -51,35 +88,8 @@
         </div>
 
         <!-- Submit Button -->
-        <button type="button" class="btn btn-primary w-100" onclick="submitForm()">Submit</button>
+        <button type="button" class="btn btn-primary w-100" onclick="submitProcessForm()">Submit</button>
     </form>
-
-    <!-- Progress Bar -->
-    <div class="progress mt-3" style="height: 25px;">
-        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-            0%
-        </div>
-    </div>
-
-    <!-- Dataset List -->
-    <h2 class="text-center mt-5 mb-4">Dataset List</h2>
-    <div class="d-flex justify-content-between mb-3">
-        <button id="reloadButton" class="btn btn-primary">Reload Datasets</button>
-    </div>
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>File ID</th>
-                <th>Filename</th>
-                <th>Status</th>
-                <th>Progress</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody id="datasetTable">
-            <!-- Rows will be dynamically added here -->
-        </tbody>
-    </table>
 
     <!-- Add SweetAlert2 JS -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -178,14 +188,76 @@
             renderDatasets(datasets);
         }
 
+        function submitProcessForm() {
+            const selectedDataset = document.querySelector('input[name="selectedDataset"]:checked');
+            if (!selectedDataset) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Please select a dataset to process.',
+                });
+                return;
+            }
+
+            const datasetId = selectedDataset.value;
+
+            const fillMethod = document.getElementById('fillMethod').value;
+            const outlierMethod = document.getElementById('outlierMethod').value;
+            const featureRange = document.getElementById('featureRange').value;
+
+            const formData = new FormData();
+            formData.append('dataset_id', datasetId);
+            formData.append('fill_method', fillMethod);
+            if (fillMethod === 'constant') {
+                const constantValue = document.getElementById('constantValue').value;
+                formData.append('constant_value', constantValue);
+            }
+            formData.append('outlier_method', outlierMethod);
+            formData.append('feature_range', featureRange);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'http://localhost:5000/processSubmit', true);
+
+            xhr.onload = function () {
+                if (xhr.status === 200) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success',
+                        text: 'Processing started successfully.',
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Failed',
+                        text: 'Failed to start processing. Please try again.',
+                    });
+                }
+            };
+
+            xhr.onerror = function () {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Connection Error',
+                    text: 'Unable to connect to the server. Please check your network connection.',
+                });
+            };
+
+            xhr.send(formData);
+        }
         function renderDatasets(datasets) {
             datasetTable.innerHTML = '';
             datasets.forEach(dataset => {
                 const row = document.createElement('tr');
                 row.id = `row-${dataset._id}`;
                 row.innerHTML = `
+                    <td>
+                        <input type="radio" name="selectedDataset" value="${dataset._id}" id="dataset-${dataset._id}">
+                    </td>
                     <td>${dataset._id}</td>
-                    <td>${dataset.filename}</td>
+                    <td>
+                        <div>${dataset.filename}</div>
+                        <button class="btn btn-success btn-sm" onclick="viewOriginalDataset('${dataset._id}')">View original</button>
+                    </td>
                     <td id="status-${dataset._id}">${dataset.status}</td>
                     <td>
                         <div class="progress">
@@ -205,6 +277,21 @@
 
         async function viewDataset(file_id) {
             const response = await fetch(`/api/datasets/${file_id}/view`);
+            if (response.ok) {
+                const data = await response.json();
+                window.open(data.url, '_blank');
+            } else {
+                const error = await response.json();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Failed!',
+                    text: error.error || 'Failed to view the dataset. Please try again.',
+                });
+            }
+        }
+
+        async function viewOriginalDataset(file_id) {
+            const response = await fetch(`/api/datasets/${file_id}/original`);
             if (response.ok) {
                 const data = await response.json();
                 window.open(data.url, '_blank');
@@ -284,7 +371,7 @@
                     };
                     const actionsCell = document.querySelector(`#row-${file_id} td:last-child`);
                     actionsCell.appendChild(viewButton);
-                    
+
                 }
             }
         });
@@ -315,4 +402,5 @@
         fetchDatasets();
     </script>
 </body>
+
 </html>
