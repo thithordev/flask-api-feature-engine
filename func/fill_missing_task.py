@@ -1,7 +1,7 @@
 import json
 import requests
-from services.fill_missing import fill_missing
-from configs.rabbitmq_config import RabbitMQHelper, RabbitMQConfig
+from func.services.fill_missing import fill_missing
+from app.configs.rabbitmq_config import RabbitMQHelper, RabbitMQConfig
 
 def process_fill_missing(ch, method, properties, body):
     """Process the fill_missing task."""

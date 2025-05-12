@@ -1,7 +1,7 @@
 import json
 import requests
-from services.feature_extraction import feature_extraction
-from configs.rabbitmq_config import RabbitMQHelper, RabbitMQConfig
+from func.services.feature_extraction import feature_extraction
+from app.configs.rabbitmq_config import RabbitMQHelper, RabbitMQConfig
 
 def process_feature_extraction(ch, method, properties, body):
     """Process the feature_extraction task."""
