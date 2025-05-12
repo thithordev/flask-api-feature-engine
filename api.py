@@ -80,6 +80,12 @@ def upload_file():
         "dtale_url": None,
         'status': 'pending',
         'step_preprocess': 'fill_missing',
+        "size_original": os.path.getsize(file_path),
+        "number_of_records_original": pd.read_csv(file_path).shape[0],
+        "number_of_feature_original": pd.read_csv(file_path).shape[1] - 1,
+        "size_preprocess": None,
+        "number_of_records_preprocess": None,
+        "number_of_feature_preprocess": None,
         "percentage_completed": 0,
     }
     file_id = mongo_helper.insert_document("dataset", file_metadata)
@@ -274,23 +280,23 @@ def preprocessing():
     """API to handle preprocessing updates for a dataset."""
     data = request.json
 
-    # Lấy thông tin từ request body
+    # Extract information from request body
     file_id = data.get('file_id')
     step_preprocess = data.get('step_preprocess')
     percentage_completed = data.get('percentage_completed')
     file_path_preprocess = data.get('file_path_preprocess')
     status = data.get('status')
 
-    # Kiểm tra các tham số bắt buộc
+    # Validate required fields
     if not file_id or not step_preprocess or percentage_completed is None or not status:
         return jsonify({"error": "Missing required fields"}), 400
 
-    # Tìm dataset trong MongoDB
+    # Find the dataset in MongoDB
     dataset = mongo_helper.find_document("dataset", {"_id": ObjectId(file_id)})
     if not dataset:
         return jsonify({"error": "Dataset not found"}), 404
 
-    # Cập nhật trạng thái preprocessing trong MongoDB
+    # Update preprocessing status in MongoDB
     update_data = {
         "step_preprocess": step_preprocess,
         "percentage_completed": percentage_completed,
@@ -298,19 +304,39 @@ def preprocessing():
         "status": status
     }
 
+    # If preprocessing is completed, calculate additional details
+    if status == "completed" and file_path_preprocess and os.path.exists(file_path_preprocess):
+        df = pd.read_csv(file_path_preprocess)
+        update_data["size_preprocess"] = os.path.getsize(file_path_preprocess)
+        update_data["number_of_records_preprocess"] = df.shape[0]
+        update_data["number_of_feature_preprocess"] = df.shape[1] - 1
+
     mongo_helper.update_document("dataset", {"_id": ObjectId(file_id)}, update_data)
 
-    # Phát tín hiệu cập nhật qua WebSocket
-    emit_progress_update(file_id, percentage_completed, status)
+    # Emit progress update with additional details
+    emit_progress_update(
+        file_id,
+        percentage_completed,
+        status,
+        file_path_preprocess=file_path_preprocess,
+        size_preprocess=update_data.get("size_preprocess"),
+        number_of_records_preprocess=update_data.get("number_of_records_preprocess"),
+        number_of_feature_preprocess=update_data.get("number_of_feature_preprocess"),
+    )
 
     return jsonify({"message": "Preprocessing updated successfully"}), 200
 
-def emit_progress_update(file_id, percentage_completed, status):
+
+def emit_progress_update(file_id, percentage_completed, status, file_path_preprocess=None, size_preprocess=None, number_of_records_preprocess=None, number_of_feature_preprocess=None):
     """Emit progress updates to the WebSocket."""
     socketio.emit('progress_update', {
         'file_id': file_id,
         'percentage_completed': percentage_completed,
-        'status': status
+        'status': status,
+        'file_path_preprocess': file_path_preprocess,
+        'size_preprocess': size_preprocess,
+        'number_of_records_preprocess': number_of_records_preprocess,
+        'number_of_feature_preprocess': number_of_feature_preprocess
     })
 
 # Simulate preprocessing updates (for demonstration purposes)

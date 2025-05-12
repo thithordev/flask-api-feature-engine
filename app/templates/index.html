@@ -9,8 +9,12 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Add SweetAlert2 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+    <!-- Add Bootstrap Icons CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     <!-- Add Socket.IO -->
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <!-- Add Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 
 <body class="container mt-5">
@@ -45,7 +49,8 @@
             <tr>
                 <th>Select</th>
                 <th>File ID</th>
-                <th>Filename</th>
+                <th>Filename Original</th>
+                <th>Filename Processed</th>
                 <th>Status</th>
                 <th>Progress</th>
                 <th>Action</th>
@@ -255,8 +260,24 @@
                     </td>
                     <td>${dataset._id}</td>
                     <td>
-                        <div>${dataset.filename}</div>
-                        <button class="btn btn-success btn-sm" onclick="viewOriginalDataset('${dataset._id}')">View original</button>
+                        <div>
+                            ${dataset.filename}
+                            <span class="d-inline-block ms-2" tabindex="0" data-bs-toggle="tooltip" title="Size: ${formatBytes(dataset.size_original)}, Records: ${dataset.number_of_records_original}, Features: ${dataset.number_of_feature_original}">
+                                <i class="bi bi-exclamation-circle text-warning"></i>
+                            </span>
+                        </div>
+                        <button class="btn btn-success btn-sm mt-2" onclick="viewOriginalDataset('${dataset._id}')">View original</button>
+                    </td>
+                    <td>
+                        <div>
+                            ${dataset.file_path_preprocess ? dataset.filename : 'N/A'}
+                            ${dataset.file_path_preprocess ? `
+                                <span class="d-inline-block ms-2" tabindex="0" data-bs-toggle="tooltip" title="Size: ${formatBytes(dataset.size_preprocess || 0)}, Records: ${dataset.number_of_records_preprocess || 0}, Features: ${dataset.number_of_feature_preprocess || 0}">
+                                    <i class="bi bi-exclamation-circle text-warning"></i>
+                                </span>
+                            ` : ''}
+                        </div>
+                        ${dataset.file_path_preprocess ? `<button class="btn btn-success btn-sm mt-2" onclick="viewDataset('${dataset._id}')">View</button>` : ''}
                     </td>
                     <td id="status-${dataset._id}">${dataset.status}</td>
                     <td>
@@ -268,11 +289,26 @@
                     </td>
                     <td>
                         <button class="btn btn-danger btn-sm" onclick="deleteDataset('${dataset._id}')">Delete</button>
-                        ${dataset.status === 'completed' ? `<button class="btn btn-success btn-sm" onclick="viewDataset('${dataset._id}')">View</button>` : ''}
                     </td>
                 `;
                 datasetTable.appendChild(row);
             });
+
+            // Initialize Bootstrap tooltips
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.forEach(tooltipTriggerEl => {
+                new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        }
+
+        // Helper function to format bytes
+        function formatBytes(bytes, decimals = 2) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
         }
 
         async function viewDataset(file_id) {
@@ -340,39 +376,66 @@
         }
 
         socket.on('progress_update', data => {
-            const { file_id, percentage_completed, status } = data;
+            const {
+                file_id,
+                percentage_completed,
+                status,
+                file_path_preprocess,
+                size_preprocess,
+                number_of_records_preprocess,
+                number_of_feature_preprocess
+            } = data;
 
+            // Update the status cell
             const statusCell = document.getElementById(`status-${file_id}`);
             if (statusCell) {
                 statusCell.textContent = status;
             }
 
+            // Update the progress bar
             const progressBar = document.getElementById(`progress-${file_id}`);
             if (progressBar) {
                 progressBar.style.width = `${percentage_completed}%`;
                 progressBar.setAttribute('aria-valuenow', percentage_completed);
                 progressBar.textContent = `${percentage_completed}%`;
+            }
 
-                if (percentage_completed === 100) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Processing Complete!',
-                        text: `Dataset ${file_id} has been processed successfully.`,
-                        timer: 2000,
-                        showConfirmButton: false
+        
+            // Show success alert when processing is complete
+            if (percentage_completed === 100) {
+
+                // Update the Filename Processed column
+                const processedCell = document.querySelector(`#row-${file_id} td:nth-child(4)`);
+                if (processedCell) {
+                    if (file_path_preprocess) {
+                        const processedFilename = file_path_preprocess.split('\\').pop();
+                        processedCell.innerHTML = `
+                            <div>
+                                ${processedFilename}
+                                <span class="d-inline-block ms-2" tabindex="0" data-bs-toggle="tooltip" title="Size: ${formatBytes(size_preprocess || 0)}, Records: ${number_of_records_preprocess || 0}, Features: ${number_of_feature_preprocess || 0}">
+                                    <i class="bi bi-exclamation-circle text-warning"></i>
+                                </span>
+                            </div>
+                            <button class="btn btn-success btn-sm mt-2" onclick="viewDataset('${file_id}')">View</button>
+                        `;
+                    } else {
+                        processedCell.innerHTML = 'N/A';
+                    }
+
+                    // Reinitialize Bootstrap tooltips
+                    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                    tooltipTriggerList.forEach(tooltipTriggerEl => {
+                        new bootstrap.Tooltip(tooltipTriggerEl);
                     });
-
-                    // Add a button to view the dataset
-                    const viewButton = document.createElement('button');
-                    viewButton.className = 'btn btn-success btn-sm';
-                    viewButton.textContent = 'View';
-                    viewButton.onclick = () => {
-                        viewDataset(file_id);
-                    };
-                    const actionsCell = document.querySelector(`#row-${file_id} td:last-child`);
-                    actionsCell.appendChild(viewButton);
-
                 }
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Processing Complete!',
+                    text: `Dataset ${file_id} has been processed successfully.`,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
             }
         });
 
